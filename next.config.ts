@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+const nextConfig = {
+  output: 'export', // Enable static export
+  assetPrefix: './',
+  trailingSlash: true,
 };
-
-export default nextConfig;
+module.exports = nextConfig;
