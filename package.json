@@ -15,7 +15,9 @@
     "@ai-sdk/xai": "^1.0.14",
     "@azure/cosmos": "^4.2.0",
     "@azure/storage-blob": "^12.26.0",
-    "langchain": "^0.3.11",
+    "@langchain/core": "^0.1.48",
+    "@langchain/openai": "^0.0.14",
+    "langchain": "^0.1.25",
     "next": "15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -26,13 +28,14 @@
     "shadcn": "^1.0.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "twitter-api-v2": "^1.18.2"
+    "twitter-api-v2": "^1.18.2",
+    "yfinance": "^2.2.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
     "eslint": "^9",
     "eslint-config-next": "15.1.4",
     "postcss": "^8",

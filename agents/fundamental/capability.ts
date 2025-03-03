@@ -1,4 +1,5 @@
-import { HumanMessage } from 'langchain/schema';
+import { HumanMessage, SystemMessage } from 'langchain/schema';
+import { ChatDeepseek } from 'langchain/chat_models/deepseek';
 import { Progress } from './utils/progress';
 import { FinancialMetrics, getFinalancialMetrics } from './tools/api';
 
@@ -37,6 +38,23 @@ const progress = {
   }
 };
 
+// Initialize DeepSeek model
+const model = new ChatDeepseek({
+  apiKey: process.env.DEEPSEEK_API_KEY,
+  temperature: 0.7,
+  maxTokens: 1000,
+});
+
+const systemPrompt = `You are a professional stock market analyst specializing in fundamental analysis.
+Your task is to analyze financial metrics and provide detailed reasoning for your analysis.
+Focus on four key areas:
+1. Profitability (ROE, margins)
+2. Growth (revenue, earnings, book value)
+3. Financial Health (liquidity, leverage)
+4. Price Ratios (P/E, P/B, P/S)
+
+Provide your analysis in a structured format with clear reasoning for each aspect.`;
+
 export async function fundamentalsAgent(state: AgentState) {
   const { data } = state;
   const { end_date, tickers } = data;
@@ -59,96 +77,70 @@ export async function fundamentalsAgent(state: AgentState) {
     const signals: string[] = [];
     const reasoning: { [key: string]: SignalReasoning } = {};
 
-    // 1. Profitability Analysis
-    progress.updateStatus("fundamentals_agent", ticker, "Analyzing profitability");
-    const { return_on_equity, net_margin, operating_margin } = metrics;
+    // Prepare metrics for AI analysis
+    const metricsPrompt = `
+    Analyze the following financial metrics for ${ticker}:
     
-    const profitabilityThresholds: [number | null, number][] = [
-      [return_on_equity, 0.15],
-      [net_margin, 0.20],
-      [operating_margin, 0.15]
-    ];
-
-    const profitabilityScore = profitabilityThresholds.reduce((score, [metric, threshold]) => 
-      score + (metric !== null && metric > threshold ? 1 : 0), 0);
-
-    signals.push(profitabilityScore >= 2 ? "bullish" : profitabilityScore === 0 ? "bearish" : "neutral");
-    reasoning.profitability_signal = {
-      signal: signals[0],
-      details: `ROE: ${return_on_equity?.toFixed(2)}%, Net Margin: ${net_margin?.toFixed(2)}%, Op Margin: ${operating_margin?.toFixed(2)}%`
-    };
-
-    // 2. Growth Analysis
-    progress.updateStatus("fundamentals_agent", ticker, "Analyzing growth");
-    const { revenue_growth, earnings_growth, book_value_growth } = metrics;
+    Profitability Metrics:
+    - Return on Equity: ${metrics.return_on_equity}%
+    - Net Margin: ${metrics.net_margin}%
+    - Operating Margin: ${metrics.operating_margin}%
     
-    const growthThresholds: [number | null, number][] = [
-      [revenue_growth, 0.10],
-      [earnings_growth, 0.10],
-      [book_value_growth, 0.10]
-    ];
-
-    const growthScore = growthThresholds.reduce((score, [metric, threshold]) =>
-      score + (metric !== null && metric > threshold ? 1 : 0), 0);
-
-    signals.push(growthScore >= 2 ? "bullish" : growthScore === 0 ? "bearish" : "neutral");
-    reasoning.growth_signal = {
-      signal: signals[1],
-      details: `Revenue Growth: ${revenue_growth?.toFixed(2)}%, Earnings Growth: ${earnings_growth?.toFixed(2)}%`
-    };
-
-    // 3. Financial Health
-    progress.updateStatus("fundamentals_agent", ticker, "Analyzing financial health");
-    const { current_ratio, debt_to_equity, free_cash_flow_per_share, earnings_per_share } = metrics;
+    Growth Metrics:
+    - Revenue Growth: ${metrics.revenue_growth}%
+    - Earnings Growth: ${metrics.earnings_growth}%
+    - Book Value Growth: ${metrics.book_value_growth}%
     
-    let healthScore = 0;
-    if (current_ratio && current_ratio > 1.5) healthScore++;
-    if (debt_to_equity && debt_to_equity < 0.5) healthScore++;
-    if (free_cash_flow_per_share && earnings_per_share && 
-        free_cash_flow_per_share > earnings_per_share * 0.8) healthScore++;
-
-    signals.push(healthScore >= 2 ? "bullish" : healthScore === 0 ? "bearish" : "neutral");
-    reasoning.financial_health_signal = {
-      signal: signals[2],
-      details: `Current Ratio: ${current_ratio?.toFixed(2)}, D/E: ${debt_to_equity?.toFixed(2)}`
-    };
-
-    // 4. Price Ratios
-    progress.updateStatus("fundamentals_agent", ticker, "Analyzing valuation ratios");
-    const { price_to_earnings_ratio, price_to_book_ratio, price_to_sales_ratio } = metrics;
+    Financial Health:
+    - Current Ratio: ${metrics.current_ratio}
+    - Debt to Equity: ${metrics.debt_to_equity}
+    - Free Cash Flow per Share: ${metrics.free_cash_flow_per_share}
+    - Earnings per Share: ${metrics.earnings_per_share}
     
-    const priceRatioThresholds: [number | null, number][] = [
-      [price_to_earnings_ratio, 25],
-      [price_to_book_ratio, 3],
-      [price_to_sales_ratio, 5]
-    ];
-
-    const priceRatioScore = priceRatioThresholds.reduce((score, [metric, threshold]) =>
-      score + (metric !== null && metric > threshold ? 1 : 0), 0);
-
-    signals.push(priceRatioScore >= 2 ? "bullish" : priceRatioScore === 0 ? "bearish" : "neutral");
-    reasoning.price_ratios_signal = {
-      signal: signals[3],
-      details: `P/E: ${price_to_earnings_ratio?.toFixed(2)}, P/B: ${price_to_book_ratio?.toFixed(2)}, P/S: ${price_to_sales_ratio?.toFixed(2)}`
-    };
-
-    // Calculate final signal and confidence
-    progress.updateStatus("fundamentals_agent", ticker, "Calculating final signal");
-    const bullishSignals = signals.filter(s => s === "bullish").length;
-    const bearishSignals = signals.filter(s => s === "bearish").length;
-
-    const overallSignal = bullishSignals > bearishSignals ? "bullish" :
-                         bearishSignals > bullishSignals ? "bearish" : "neutral";
+    Price Ratios:
+    - P/E Ratio: ${metrics.price_to_earnings_ratio}
+    - P/B Ratio: ${metrics.price_to_book_ratio}
+    - P/S Ratio: ${metrics.price_to_sales_ratio}
     
-    const confidence = Math.round((Math.max(bullishSignals, bearishSignals) / signals.length) * 100);
+    Please provide a detailed analysis with signals (bullish/bearish/neutral) and confidence levels for each aspect.`;
 
-    fundamentalAnalysis[ticker] = {
-      signal: overallSignal,
-      confidence,
-      reasoning
-    };
+    try {
+      // Get AI analysis
+      const response = await model.call([
+        new SystemMessage(systemPrompt),
+        new HumanMessage(metricsPrompt)
+      ]);
 
-    progress.updateStatus("fundamentals_agent", ticker, "Done");
+      // Parse AI response
+      const analysis = JSON.parse(response.content);
+      
+      // Update fundamental analysis
+      fundamentalAnalysis[ticker] = {
+        signal: analysis.overall_signal,
+        confidence: analysis.confidence,
+        reasoning: {
+          profitability_signal: analysis.profitability,
+          growth_signal: analysis.growth,
+          financial_health_signal: analysis.financial_health,
+          price_ratios_signal: analysis.price_ratios
+        }
+      };
+
+      progress.updateStatus("fundamentals_agent", ticker, "Analysis complete");
+    } catch (error) {
+      console.error(`Error analyzing ${ticker}:`, error);
+      // Fallback to basic analysis if AI fails
+      fundamentalAnalysis[ticker] = {
+        signal: "neutral",
+        confidence: 50,
+        reasoning: {
+          profitability_signal: { signal: "neutral", details: "AI analysis unavailable" },
+          growth_signal: { signal: "neutral", details: "AI analysis unavailable" },
+          financial_health_signal: { signal: "neutral", details: "AI analysis unavailable" },
+          price_ratios_signal: { signal: "neutral", details: "AI analysis unavailable" }
+        }
+      };
+    }
   }
 
   // Create the fundamental analysis message
