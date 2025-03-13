@@ -24,6 +24,7 @@ interface SignalReasoning {
 interface FundamentalAnalysis {
   signal: string;
   confidence: number;
+  metrics: any;
   reasoning: {
     profitability_signal: SignalReasoning;
     growth_signal: SignalReasoning;
@@ -113,6 +114,7 @@ export async function fundamentalsAgent(state: AgentState) {
       fundamentalAnalysis[ticker] = {
         signal: analysis.overall_signal,
         confidence: analysis.confidence,
+        metrics: metrics,
         reasoning: {
           profitability_signal: analysis.profitability,
           growth_signal: analysis.growth,
@@ -127,6 +129,7 @@ export async function fundamentalsAgent(state: AgentState) {
       fundamentalAnalysis[ticker] = {
         signal: "neutral",
         confidence: 50,
+        metrics: metrics,
         reasoning: {
           profitability_signal: { signal: "neutral", details: "AI analysis unavailable" },
           growth_signal: { signal: "neutral", details: "AI analysis unavailable" },

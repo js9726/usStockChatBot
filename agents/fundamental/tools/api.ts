@@ -36,20 +36,26 @@ export async function getFinalancialMetrics(params: GetFinancialMetricsParams): 
     try {
       // Get quote data
       const quote = await yahooFinance.quote(ticker);
+      console.log('Quote data:', JSON.stringify(quote, null, 2));
+      
       if (!quote || !quote.symbol) {
         throw new Error(`No data found for ticker ${ticker}`);
       }
 
       console.log(`Found stock info for ${ticker}`);
 
-      // Get financial statements
-      const financials = await yahooFinance.quoteSummary(ticker, [
-        'incomeStatementHistory',
-        'balanceSheetHistory',
-        'cashflowStatementHistory',
-        'defaultKeyStatistics',
-        'financialData'
-      ]);
+      // Get financial statements with correct options format
+      const financials = await yahooFinance.quoteSummary(ticker, {
+        modules: [
+          'incomeStatementHistory',
+          'balanceSheetHistory',
+          'cashflowStatementHistory',
+          'defaultKeyStatistics',
+          'financialData'
+        ]
+      });
+      
+      console.log('Financial data:', JSON.stringify(financials, null, 2));
 
       if (!financials) {
         throw new Error(`Failed to fetch financial statements for ${ticker}`);
@@ -87,7 +93,7 @@ export async function getFinalancialMetrics(params: GetFinancialMetricsParams): 
         price_to_sales_ratio: financialData?.priceToSalesTrailing12Months || null
       };
 
-      console.log(`Successfully calculated metrics for ${ticker}`);
+      console.log('Calculated metrics:', JSON.stringify(metrics, null, 2));
       return [metrics];
     } catch (error) {
       console.error(`Error fetching data for ${ticker}:`, error);

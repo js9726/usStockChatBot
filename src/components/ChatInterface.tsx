@@ -22,6 +22,31 @@ const ChatInterface: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
+  const formatMetrics = (metrics: any) => {
+    return `
+Raw Financial Metrics:
+Profitability:
+- Return on Equity: ${metrics.return_on_equity?.toFixed(2) || 'N/A'}%
+- Net Margin: ${metrics.net_margin?.toFixed(2) || 'N/A'}%
+- Operating Margin: ${metrics.operating_margin?.toFixed(2) || 'N/A'}%
+
+Growth:
+- Revenue Growth: ${metrics.revenue_growth?.toFixed(2) || 'N/A'}%
+- Earnings Growth: ${metrics.earnings_growth?.toFixed(2) || 'N/A'}%
+- Book Value Growth: ${metrics.book_value_growth?.toFixed(2) || 'N/A'}%
+
+Financial Health:
+- Current Ratio: ${metrics.current_ratio?.toFixed(2) || 'N/A'}
+- Debt to Equity: ${metrics.debt_to_equity?.toFixed(2) || 'N/A'}
+- Free Cash Flow per Share: ${metrics.free_cash_flow_per_share?.toFixed(2) || 'N/A'}
+- Earnings per Share: ${metrics.earnings_per_share?.toFixed(2) || 'N/A'}
+
+Price Ratios:
+- P/E Ratio: ${metrics.price_to_earnings_ratio?.toFixed(2) || 'N/A'}
+- P/B Ratio: ${metrics.price_to_book_ratio?.toFixed(2) || 'N/A'}
+- P/S Ratio: ${metrics.price_to_sales_ratio?.toFixed(2) || 'N/A'}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -29,12 +54,10 @@ const ChatInterface: React.FC = () => {
     const userMessage = input.trim();
     setInput('');
     
-    // Add user message
     setMessages(prev => [...prev, { text: userMessage, isUser: true }]);
     setIsLoading(true);
 
     try {
-      // Extract potential tickers from the message
       const tickerRegex = /\$([A-Za-z]+)/g;
       const tickers = Array.from(userMessage.matchAll(tickerRegex)).map(match => match[1]);
       
@@ -48,7 +71,7 @@ const ChatInterface: React.FC = () => {
           },
           body: JSON.stringify({
             tickers,
-            end_date: new Date().toISOString().split('T')[0], // Current date
+            end_date: new Date().toISOString().split('T')[0],
           }),
         });
 
@@ -69,11 +92,12 @@ const ChatInterface: React.FC = () => {
           throw new Error('Invalid response format from API');
         }
 
-        // Format the analysis response
+        // Format the analysis response with both metrics and analysis
         const analysisResponse = Object.entries(data.data.analyst_signals.fundamentals_agent)
           .map(([ticker, analysis]: [string, any]) => {
-            return `${ticker.toUpperCase()}: ${analysis.signal.toUpperCase()} (${analysis.confidence}% confidence)\n` +
-                   `Reasoning:\n` +
+            return `${ticker.toUpperCase()}: ${analysis.signal.toUpperCase()} (${analysis.confidence}% confidence)\n\n` +
+                   formatMetrics(analysis.metrics) + '\n\n' +
+                   `Analysis:\n` +
                    `- Profitability: ${analysis.reasoning.profitability_signal.details}\n` +
                    `- Growth: ${analysis.reasoning.growth_signal.details}\n` +
                    `- Financial Health: ${analysis.reasoning.financial_health_signal.details}\n` +
@@ -89,9 +113,9 @@ const ChatInterface: React.FC = () => {
         }]);
       }
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
+      console.error('Error:', error);
       setMessages(prev => [...prev, { 
-        text: `Error: ${error instanceof Error ? error.message : 'Failed to analyze stocks'}`, 
+        text: `Error: ${error instanceof Error ? error.message : 'An error occurred'}`, 
         isUser: false 
       }]);
     } finally {

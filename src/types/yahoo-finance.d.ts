@@ -26,9 +26,13 @@ declare module 'yahoo-finance2' {
     }[];
   }
 
+  interface QuoteSummaryOptions {
+    modules: string[];
+  }
+
   interface YahooFinance {
     quote(symbol: string): Promise<QuoteResponse>;
-    quoteSummary(symbol: string, modules: string[]): Promise<any>;
+    quoteSummary(symbol: string, options: QuoteSummaryOptions): Promise<any>;
   }
 
   const yahooFinance: YahooFinance;
