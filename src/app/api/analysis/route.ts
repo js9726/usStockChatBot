@@ -1,31 +1,28 @@
 import { NextResponse } from 'next/server';
 import { fundamentalsAgent } from '../../../../agents/fundamental/capability';
+import { formatTickers } from '@/utils/format';
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
+    const body = await request.json();
     console.log('Received request body:', body);
 
-    const { tickers, end_date } = body;
-
-    if (!tickers || !Array.isArray(tickers) || tickers.length === 0) {
+    if (!body.tickers || !Array.isArray(body.tickers)) {
+      console.error('Invalid request: tickers array is missing or invalid');
       return NextResponse.json(
-        { error: 'Invalid tickers provided' },
+        { error: 'Invalid request: tickers array is required' },
         { status: 400 }
       );
     }
 
-    if (!end_date) {
-      return NextResponse.json(
-        { error: 'End date is required' },
-        { status: 400 }
-      );
-    }
+    // Format tickers (remove $ symbol and trim)
+    const formattedTickers = formatTickers(body.tickers);
+    console.log('Formatted tickers:', formattedTickers);
 
     const state = {
       data: {
-        tickers,
-        end_date,
+        tickers: formattedTickers,
+        end_date: body.endDate || new Date().toISOString(),
         analyst_signals: {}
       },
       metadata: {
@@ -34,14 +31,35 @@ export async function POST(req: Request) {
     };
 
     console.log('Calling fundamentals agent with state:', state);
-    const result = await fundamentalsAgent(state);
-    console.log('Received result from fundamentals agent:', result);
-    
-    return NextResponse.json(result);
+
+    try {
+      const result = await fundamentalsAgent(state);
+      console.log('Fundamentals agent result:', result);
+      return NextResponse.json(result);
+    } catch (error) {
+      console.error('Error in fundamentals agent:', error);
+      if (error instanceof Error) {
+        // Check for specific error types
+        if (error.message.includes('404') || error.message.includes('not found')) {
+          return NextResponse.json(
+            { error: `Stock symbol not found. Please check the symbol and try again.` },
+            { status: 404 }
+          );
+        }
+        return NextResponse.json(
+          { error: `Analysis failed: ${error.message}` },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json(
+        { error: 'An unexpected error occurred during analysis' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error('Analysis error:', error);
+    console.error('Error in API route:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to perform analysis' },
+      { error: 'Failed to process request' },
       { status: 500 }
     );
   }

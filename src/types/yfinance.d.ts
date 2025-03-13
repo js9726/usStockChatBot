@@ -1,5 +1,6 @@
 declare module 'yfinance' {
   interface StockInfo {
+    symbol?: string;
     forwardEps?: number;
     forwardPE?: number;
     priceToBook?: number;

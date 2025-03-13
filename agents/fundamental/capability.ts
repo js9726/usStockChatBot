@@ -1,5 +1,5 @@
 import { HumanMessage, SystemMessage } from 'langchain/schema';
-import { ChatDeepseek } from 'langchain/chat_models/deepseek';
+import OpenAI from 'openai';
 import { Progress } from './utils/progress';
 import { FinancialMetrics, getFinalancialMetrics } from './tools/api';
 
@@ -38,11 +38,10 @@ const progress = {
   }
 };
 
-// Initialize DeepSeek model
-const model = new ChatDeepseek({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  temperature: 0.7,
-  maxTokens: 1000,
+// Initialize DeepSeek client
+const openai = new OpenAI({
+  baseURL: 'https://api.deepseek.com',
+  apiKey: process.env.DEEPSEEK_API_KEY
 });
 
 const systemPrompt = `You are a professional stock market analyst specializing in fundamental analysis.
@@ -59,13 +58,11 @@ export async function fundamentalsAgent(state: AgentState) {
   const { data } = state;
   const { end_date, tickers } = data;
   
-  // Initialize fundamental analysis for each ticker
   const fundamentalAnalysis: { [key: string]: FundamentalAnalysis } = {};
 
   for (const ticker of tickers) {
     progress.updateStatus("fundamentals_agent", ticker, "Fetching financial metrics");
 
-    // Get the financial metrics
     const financialMetrics = await getFinalancialMetrics({
       ticker,
       endDate: end_date,
@@ -74,10 +71,6 @@ export async function fundamentalsAgent(state: AgentState) {
     });
 
     const metrics = financialMetrics[0];
-    const signals: string[] = [];
-    const reasoning: { [key: string]: SignalReasoning } = {};
-
-    // Prepare metrics for AI analysis
     const metricsPrompt = `
     Analyze the following financial metrics for ${ticker}:
     
@@ -105,16 +98,18 @@ export async function fundamentalsAgent(state: AgentState) {
     Please provide a detailed analysis with signals (bullish/bearish/neutral) and confidence levels for each aspect.`;
 
     try {
-      // Get AI analysis
-      const response = await model.call([
-        new SystemMessage(systemPrompt),
-        new HumanMessage(metricsPrompt)
-      ]);
+      const completion = await openai.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: metricsPrompt }
+        ],
+        model: "deepseek-chat",
+        temperature: 0.7,
+        max_tokens: 1000
+      });
 
-      // Parse AI response
-      const analysis = JSON.parse(response.content);
+      const analysis = JSON.parse(completion.choices[0].message.content || '{}');
       
-      // Update fundamental analysis
       fundamentalAnalysis[ticker] = {
         signal: analysis.overall_signal,
         confidence: analysis.confidence,
@@ -129,7 +124,6 @@ export async function fundamentalsAgent(state: AgentState) {
       progress.updateStatus("fundamentals_agent", ticker, "Analysis complete");
     } catch (error) {
       console.error(`Error analyzing ${ticker}:`, error);
-      // Fallback to basic analysis if AI fails
       fundamentalAnalysis[ticker] = {
         signal: "neutral",
         confidence: 50,
@@ -143,18 +137,15 @@ export async function fundamentalsAgent(state: AgentState) {
     }
   }
 
-  // Create the fundamental analysis message
   const message = new HumanMessage({
     content: JSON.stringify(fundamentalAnalysis),
     name: "fundamentals_agent"
   });
 
-  // Show reasoning if enabled
   if (state.metadata.show_reasoning) {
     showAgentReasoning(fundamentalAnalysis, "Fundamental Analysis Agent");
   }
 
-  // Update state with signals
   state.data.analyst_signals.fundamentals_agent = fundamentalAnalysis;
 
   return {
